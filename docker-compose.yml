@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: db-benchmark-postgres
+    restart: unless-stopped
+    # Максимально дефолтная конфигурация — никаких postgresql.conf override.
+    # Вся настройка (pg_read_server_files, таблицы) делается в рантайме бенчмарка.
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: benchdb
+    ports:
+      # Windows: PG в Docker через loopback; порт 5432.
+      # Если занят — сменить на 5433:5432 и поправить DSN в README.
+      - "5432:5432"
+    volumes:
+      # Данные PG (изолированы от хоста).
+      - pgdata:/var/lib/postgresql/data
+      # Сгенерированные TSV-файлы; монтируются в контейнер, чтобы нативный
+      # server-side COPY (#E) читал их напрямую (файл должен быть на узле БД).
+      - ./benchmark-data:/data:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d benchdb"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+volumes:
+  pgdata:

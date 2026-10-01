@@ -1,0 +1,25 @@
+# .NET / build
+bin/
+obj/
+
+build/
+out/
+target/
+*.iml
+*.idea/
+.vscode/
+
+# BenchmarkDotNet
+.benchmark/results/
+BenchmarkDotNet.artifacts/
+
+# Сгенерированные данные
+benchmark-data/
+*.tsv.gz
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Логи
+*.log
