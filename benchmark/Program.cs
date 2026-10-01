@@ -3,12 +3,16 @@ using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Running;
 using DbBenchmark.Benchmarking;
 
-// Запуск: dotnet run -- --mode=validation|dev|full
-// Сдержанный harness (мало warmup/итераций), чтобы dev/full не растягивались на часы.
+// Запуск: dotnet run -- --mode=validation|dev|full [--filter "*<Стратегия>*" | --list flat]
+// Отбор и запуск бенчмарков делегируется BenchmarkSwitcher (см. ниже).
 string mode = "validation";
+var bdnArgs = new List<string>();
 for (int i = 0; i < args.Length; i++)
-    if (args[i] == "--mode" && i + 1 < args.Length) mode = args[i + 1];
-    else if (args[i].StartsWith("--mode=")) mode = args[i].Substring("--mode=".Length);
+{
+    if (args[i] == "--mode") { mode = (i + 1 < args.Length) ? args[i + 1] : mode; i++; continue; }
+    else if (args[i].StartsWith("--mode=")) { mode = args[i].Substring("--mode=".Length); continue; }
+    bdnArgs.Add(args[i]);
+}
 
 RunArgs.Configure(mode);
 
@@ -45,7 +49,11 @@ Type[] benchmarkTypes =
 
 Console.WriteLine($"=== db-benchmark run: mode={RunArgs.Mode}, sizes={string.Join(",", RunArgs.Sizes)} ===");
 
-foreach (var t in benchmarkTypes)
-    BenchmarkRunner.Run(t, config);
+// Всё управление запуском/отбором стратегий отдаётся BenchmarkSwitcher:
+//   --filter "*<Стратегия>*"  — запустить выбранные стратегии;
+//   --list flat|tree          — вывести список без запуска;
+//   (без аргументов)          — запустить все 5 стратегий.
+var switcher = new BenchmarkSwitcher(benchmarkTypes);
+switcher.Run(bdnArgs.ToArray(), config);
 
 Console.WriteLine("Done.");

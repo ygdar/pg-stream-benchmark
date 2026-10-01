@@ -51,6 +51,23 @@ dotnet run -- --mode=dev
 dotnet run -- --mode=full
 ```
 
+Отбор стратегий выполняется через BenchmarkDotNet (`BenchmarkSwitcher`).
+Размеры данных выбираются только `--mode`; фильтр `--filter` выбирает **стратегии** (не размеры).
+
+```bash
+# только стратегия B (RawCopy) на размерах validation
+dotnet run -- --mode=validation --filter "*RawCopy*"
+
+# подмножество стратегий: A (BatchInsert) и E (NativeCopy)
+dotnet run -- --mode=dev --filter "*BatchInsert*|*NativeCopy*"
+
+# список доступных бенчмарков без запуска
+dotnet run -- --list flat
+# (или --list tree — дерево)
+```
+
+Без `--filter` выполняются все 5 стратегий на размерах выбранного `--mode`.
+
 Генерация TSV выполняется в `benchmark-data/` (смонтировано в контейнер как `/data` для нативного COPY).
 
 ## Структура
