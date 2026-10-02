@@ -29,6 +29,19 @@ public static class SummaryReport
         return reportFileName;
     }
 
+    /// <summary>Код стратегии (внутренний) → русское название для отчёта.</summary>
+    private static readonly Dictionary<string, string> StrategyRu = new()
+    {
+        ["A_BatchInsert"] = "Пакетный INSERT (A)",
+        ["B_RawBinaryCopy"] = "Двоичный COPY (B)",
+        ["C_Linq2DbBulk"] = "LINQ2DB BulkCopy (C)",
+        ["D_EfChunk"] = "EF Core батч (D)",
+        ["E_NativeCopy"] = "Нативный COPY (E)",
+    };
+
+    private static string RussianName(string code) =>
+        StrategyRu.TryGetValue(code, out var ru) ? ru : code;
+
     /// <summary>Читает тайминг из *-report.csv (колонки Rows и Mean).</summary>
     private static Dictionary<(string strategy, string rows), double> ReadTiming(string resultsDir)
     {
@@ -68,18 +81,21 @@ public static class SummaryReport
 
         var rowsLine = new List<string[]>
         {
-            new[] { "Strategy", "Rows", "TimeMs", "PeakMemMB", "ClientCpuCorePct",
-                    "ClientCpuAllPct", "ServerWorkRate(est)", "PayloadBytes",
-                    "OverheadBytes", "PayloadOverheadRatio", "Note" },
+            new[] { "Стратегия", "Строк", "Время, мс", "Память клиента, МБ",
+                    "CPU клиента (ядро), %", "CPU клиента (все ядра), %",
+                    "Активность сервера (оценка)", "Полезные данные, байт",
+                    "Накладные, байт", "Отношение payload/overhead", "Примечание" },
         };
 
         foreach (var ((strategy, rows), meanMs) in timings.OrderBy(k => k.Key.Item1).ThenBy(k => int.Parse(k.Key.Item2)))
         {
             var has = byKey.TryGetValue((strategy, rows), out var m);
-            var note = m?.EstimateNote ?? (has ? "" : "no per-run metrics");
+            var note = m?.EstimateNote ?? (has ? "" : "нет метрик прогона");
+            if (note == "server work & traffic are estimates")
+                note = "серверная нагрузка и трафик — оценка";
             rowsLine.Add(new[]
             {
-                strategy,
+                RussianName(strategy),
                 rows,
                 meanMs.ToString("0.###", CultureInfo.InvariantCulture),
                 has ? (m!.PeakMemoryBytes / 1048576.0).ToString("0.0", CultureInfo.InvariantCulture) : "?",
@@ -111,7 +127,7 @@ public static class SummaryReport
         foreach (var line in rowsLine.Skip(1))
             md.AppendLine("| " + string.Join(" | ", line) + " |");
         md.AppendLine();
-        md.AppendLine("> Примечания: `ServerWorkRate` и обыден в трафике — оценочные (относительные) значения.");
+        md.AppendLine("> Примечания: значение «Активность сервера» и данные о трафике — оценочные (относительные) величины.");
         File.WriteAllText(Path.Combine(resultsDir, "summary.md"), md.ToString());
 
         Console.WriteLine($"Summary written: {csvPath}");
