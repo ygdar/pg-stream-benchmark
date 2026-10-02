@@ -75,11 +75,6 @@ public class Linq2DbBulkBenchmark : InsertBenchmarkBase
     protected override IInsertStrategy CreateStrategy() => new Linq2DbBulkStrategy();
 }
 
-public class EfChunkBenchmark : InsertBenchmarkBase
-{
-    protected override IInsertStrategy CreateStrategy() => new EfChunkStrategy();
-}
-
 public class NativeCopyBenchmark : InsertBenchmarkBase
 {
     protected override IInsertStrategy CreateStrategy() => new NativeCopyStrategy();

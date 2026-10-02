@@ -17,7 +17,6 @@ public static class SummaryReport
         ("BatchInsert", "A_BatchInsert"),
         ("RawCopy", "B_RawBinaryCopy"),
         ("Linq2DbBulk", "C_Linq2DbBulk"),
-        ("EfChunk", "D_EfChunk"),
         ("NativeCopy", "E_NativeCopy"),
     };
 
@@ -35,12 +34,49 @@ public static class SummaryReport
         ["A_BatchInsert"] = "Пакетный INSERT (A)",
         ["B_RawBinaryCopy"] = "Двоичный COPY (B)",
         ["C_Linq2DbBulk"] = "LINQ2DB BulkCopy (C)",
-        ["D_EfChunk"] = "EF Core батч (D)",
         ["E_NativeCopy"] = "Нативный COPY (E)",
     };
 
     private static string RussianName(string code) =>
         StrategyRu.TryGetValue(code, out var ru) ? ru : code;
+
+    /// <summary>Форматирует размер в байтах в человекочитаемые МБ/ГБ.</summary>
+    private static string FormatBytes(long bytes)
+    {
+        const double mb = 1048576.0, gb = 1073741824.0;
+        return bytes >= gb
+            ? (bytes / gb).ToString("0.0", CultureInfo.InvariantCulture) + " ГБ"
+            : (bytes / mb).ToString("0.0", CultureInfo.InvariantCulture) + " МБ";
+    }
+
+    /// <summary>Легенда метрик: название колонки → что измеряет и как получено.</summary>
+    private static readonly (string name, string what, string how)[] MetricLegend =
+    {
+        ("Время, мс",
+         "Среднее (Mean) время одной загрузки набора данных",
+         "из отчёта BenchmarkDotNet (*-report.csv) по итерациям прогона; приводится к миллисекундам"),
+        ("Память клиента, МБ",
+         "Пиковый рабочий набор процесса-клиента во время загрузки",
+         "фоновый сэмплинг WorkingSet64 (каждые 100 мс) через System.Diagnostics.Process, вне тайминга"),
+        ("CPU клиента (ядро), %",
+         "Средняя утилизация CPU процесса-клиента в % от одного ядра",
+         "дельта Process.TotalProcessorTime / затраченное время × 100"),
+        ("CPU клиента (все ядра), %",
+         "Средняя утилизация CPU клиента в % от всех ядер машины",
+         "та же дельта, дополнительно делённая на число ядер"),
+        ("Активность сервера (оценка)",
+         "Оценочная активность PostgreSQL во время прогона (интенсивность работы с вставками/транзакциями)",
+         "разница счётчиков pg_stat_database (xact_commit, tup_inserted) за прогон, делённая на время; оценочное относительное значение"),
+        ("Полезные данные, МБ/ГБ",
+         "Размер полезных данных (сгенерированный TSV-файл), который загружается",
+         "детерминированный размер файла набора данных"),
+        ("Накладные, МБ/ГБ",
+         "Оценённый объём накладного обмена (служебные команды, разделители, батчинг)",
+         "расчёт по проводному механизму стратегии относительно полезных данных; оценочное значение"),
+        ("Отношение payload/overhead",
+         "Доля полезных данных в общем трафике: payload/(payload+overhead)",
+         "вычисляется из полезных и накладных данных; ближе к 1 — эффективнее"),
+    };
 
     /// <summary>Читает тайминг из *-report.csv (колонки Rows и Mean).</summary>
     private static Dictionary<(string strategy, string rows), double> ReadTiming(string resultsDir)
@@ -60,13 +96,20 @@ public static class SummaryReport
                 var rows = csv.GetField("Rows");
                 var mean = csv.GetField("Mean");
                 if (rows is null || mean is null || mean == "NA") continue;
-                // Mean из BDN — снабжён единицей и культурными разделителями (напр. "1,011.94 ms").
-                // Приводим к миллисекундам инвариантно.
-                var cleaned = mean.Replace("ms", "", StringComparison.OrdinalIgnoreCase)
-                                  .Replace(" ", "")
-                                  .Replace(",", "");
-                if (double.TryParse(cleaned, NumberStyles.Any, CultureInfo.InvariantCulture, out var ms))
-                    timings[(strategy, rows)] = ms;
+                // Mean из BDN — число с единицей и культурными разделителями
+                // (напр. "1,011.94 ms", "2.964 s", "0.123 us"). Приводим к миллисекундам инвариантно.
+                var match = System.Text.RegularExpressions.Regex.Match(mean, @"^\s*([\d.,]+)\s*(ns|us|ms|s)?\s*$");
+                if (!match.Success) continue;
+                var num = double.Parse(match.Groups[1].Value.Replace(",", ""), CultureInfo.InvariantCulture);
+                double ms = match.Groups[2].Value switch
+                {
+                    "s" => num * 1000.0,
+                    "ms" => num,
+                    "us" => num / 1000.0,
+                    "ns" => num / 1_000_000.0,
+                    _ => num,
+                };
+                timings[(strategy, rows)] = ms;
             }
         }
         return timings;
@@ -83,8 +126,8 @@ public static class SummaryReport
         {
             new[] { "Стратегия", "Строк", "Время, мс", "Память клиента, МБ",
                     "CPU клиента (ядро), %", "CPU клиента (все ядра), %",
-                    "Активность сервера (оценка)", "Полезные данные, байт",
-                    "Накладные, байт", "Отношение payload/overhead", "Примечание" },
+                    "Активность сервера (оценка)", "Полезные данные, МБ/ГБ",
+                    "Накладные, МБ/ГБ", "Отношение payload/overhead", "Примечание" },
         };
 
         foreach (var ((strategy, rows), meanMs) in timings.OrderBy(k => k.Key.Item1).ThenBy(k => int.Parse(k.Key.Item2)))
@@ -102,8 +145,8 @@ public static class SummaryReport
                 has ? m!.ClientCpuCorePct.ToString("0.00", CultureInfo.InvariantCulture) : "?",
                 has ? m!.ClientCpuAllPct.ToString("0.00", CultureInfo.InvariantCulture) : "?",
                 has ? m!.ServerWorkRate.ToString("0.0", CultureInfo.InvariantCulture) : "?",
-                has ? m!.PayloadBytes.ToString(CultureInfo.InvariantCulture) : "?",
-                has ? m!.OverheadBytes.ToString(CultureInfo.InvariantCulture) : "?",
+                has ? FormatBytes(m!.PayloadBytes) : "?",
+                has ? FormatBytes(m!.OverheadBytes) : "?",
                 has ? m!.PayloadOverheadRatio.ToString("0.0000", CultureInfo.InvariantCulture) : "?",
                 note ?? "",
             });
@@ -129,7 +172,11 @@ public static class SummaryReport
         foreach (var line in rowsLine.Skip(1))
             md.AppendLine("| " + string.Join(" | ", line) + " |");
         md.AppendLine();
-        md.AppendLine("> Примечания: значение «Активность сервера» и данные о трафике — оценочные (относительные) величины.");
+        md.AppendLine("## О метриках");
+        foreach (var (name, what, how) in MetricLegend)
+            md.AppendLine($"- **{name}** — {what}. Получено: {how}.");
+        md.AppendLine();
+        md.AppendLine("> Примечания: «Активность сервера», накладные расходы и данные о трафике — оценочные (относительные) величины.");
         File.WriteAllText(Path.Combine(resultsDir, "summary.md"), md.ToString());
 
         Console.WriteLine($"Summary written: {csvPath}");

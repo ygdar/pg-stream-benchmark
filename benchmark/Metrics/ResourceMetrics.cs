@@ -35,7 +35,6 @@ public static class TrafficModel
         "A_BatchInsert"  => "multi-row VALUES",
         "B_RawBinaryCopy" => "binary COPY",
         "C_Linq2DbBulk"  => "binary COPY",
-        "D_EfChunk"      => "SQL row-batch",
         "E_NativeCopy"   => MechanismServerCopy,
         _ => "unknown",
     };
@@ -57,7 +56,7 @@ public static class TrafficModel
             // 4-байтовые префиксы длины на колонку + заголовок/маркер строки.
             overhead = rows * (colCount * 4 + 8);
         }
-        else // multi-row VALUES / SQL row-batch
+        else // multi-row VALUES
         {
             const int colCount = 6;
             // текстовые разделители/скобки на кортеж + служебные байты SQL-команды.

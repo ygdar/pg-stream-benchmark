@@ -2,14 +2,13 @@
 
 Бенчмарк относительной скорости стратегий потоковой/батчевой вставки TSV-данных в PostgreSQL на языке C# (.NET).
 
-Сравниваются 5 стратегий загрузки **одного и того же** сгенерированного TSV-файла:
+Сравниваются 4 стратегии загрузки **одного и того же** сгенерированного TSV-файла:
 
 | ID | Стратегия | Проводной механизм | ORM |
 |----|-----------|--------------------|-----|
 | A | raw multi-row INSERT (npgsql)          | SQL multi-row VALUES | нет |
 | B | raw BINARY COPY (npgsql `copyIn`)      | COPY (binary)       | нет |
 | C | LINQ2DB BulkCopy (`ProviderSpecific`)  | COPY (binary)       | linq2db |
-| D | EF Core chunk (SaveChanges)            | SQL row-batch       | EF Core |
 | E | нативный server-side `COPY`            | COPY (text, сервер) | PG |
 
 Цель — **относительный** выигрыш по времени, а не абсолютные значения (окружение: Windows + PostgreSQL в Docker через loopback).
@@ -66,7 +65,7 @@ dotnet run -- --list flat
 # (или --list tree — дерево)
 ```
 
-Без `--filter` выполняются все 5 стратегий на размерах выбранного `--mode`.
+Без `--filter` выполняются все 4 стратегии на размерах выбранного `--mode`.
 
 Генерация TSV выполняется в `benchmark-data/` (смонтировано в контейнер как `/data` для нативного COPY).
 

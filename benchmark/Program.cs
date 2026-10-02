@@ -27,7 +27,7 @@ RunArgs.Prepare();
 
 // Harness: validation — быстрая проверка рабочих итераций (ShortRun);
 // dev/full — меньший набор итераций, т.к. медиум/большие объёмы вставки очень ресурсоёмки
-// (EF chunk и batch ~40-55 мкс/строка, на 30M строк это десятки минут на один прогон).
+// (batch ~40-55 мкс/строка, на 30M строк это десятки минут на один прогон).
 Job job = RunArgs.Mode switch
 {
     DbBenchmark.Benchmarking.RunMode.Validation => Job.ShortRun.WithId("validation"),
@@ -44,7 +44,6 @@ Type[] benchmarkTypes =
     typeof(BatchInsertBenchmark),
     typeof(RawCopyBenchmark),
     typeof(Linq2DbBulkBenchmark),
-    typeof(EfChunkBenchmark),
     typeof(NativeCopyBenchmark),
 };
 
@@ -53,7 +52,18 @@ Console.WriteLine($"=== db-benchmark run: mode={RunArgs.Mode}, sizes={string.Joi
 // Всё управление запуском/отбором стратегий отдаётся BenchmarkSwitcher:
 //   --filter "*<Стратегия>*"  — запустить выбранные стратегии;
 //   --list flat|tree          — вывести список без запуска;
-//   (без флагов отбора)       — запустить все 5 стратегий.
+//   (без флагов отбора)       — запустить все 4 стратегии.
+// Подчищаем отчёты и сводки предыдущих прогонов, чтобы сводка содержала только
+// бенчмарки текущего прогона (при отборе через --filter/разные режимы файлы
+// `*-report.csv` из прошлых запусков иначе накапливаются и попадают в сводку).
+var resultsDir = Path.Combine(Directory.GetCurrentDirectory(), "BenchmarkDotNet.Artifacts", "results");
+if (Directory.Exists(resultsDir))
+    foreach (var f in Directory.EnumerateFiles(resultsDir))
+        if (f.EndsWith("-report.csv", StringComparison.OrdinalIgnoreCase)
+            || f.EndsWith("summary.csv", StringComparison.OrdinalIgnoreCase)
+            || f.EndsWith("summary.md", StringComparison.OrdinalIgnoreCase))
+            File.Delete(f);
+
 // При этом без --filter/--list BenchmarkSwitcher уходит в интерактивный выбор
 // и ждёт stdin (`--filter *` явно означает «все»).
 var switcher = new BenchmarkSwitcher(benchmarkTypes);
