@@ -2,6 +2,7 @@ using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Running;
 using DbBenchmark.Benchmarking;
+using DbBenchmark.Metrics;
 
 // Запуск: dotnet run -- --mode=validation|dev|full [--filter "*<Стратегия>*" | --list flat]
 // Отбор и запуск бенчмарков делегируется BenchmarkSwitcher (см. ниже).
@@ -52,8 +53,16 @@ Console.WriteLine($"=== db-benchmark run: mode={RunArgs.Mode}, sizes={string.Joi
 // Всё управление запуском/отбором стратегий отдаётся BenchmarkSwitcher:
 //   --filter "*<Стратегия>*"  — запустить выбранные стратегии;
 //   --list flat|tree          — вывести список без запуска;
-//   (без аргументов)          — запустить все 5 стратегий.
+//   (без флагов отбора)       — запустить все 5 стратегий.
+// При этом без --filter/--list BenchmarkSwitcher уходит в интерактивный выбор
+// и ждёт stdin (`--filter *` явно означает «все»).
 var switcher = new BenchmarkSwitcher(benchmarkTypes);
-switcher.Run(bdnArgs.ToArray(), config);
+if (bdnArgs.Count == 0 || bdnArgs.All(a => !a.StartsWith("--filter") && !a.StartsWith("--list")))
+    switcher.Run(new[] { "--filter", "*" }, config);
+else
+    switcher.Run(bdnArgs.ToArray(), config);
+
+// Единый отчёт-сводка по всем запущенным бенчмаркам текущего прогона.
+SummaryReport.Generate();
 
 Console.WriteLine("Done.");

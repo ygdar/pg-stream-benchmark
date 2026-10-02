@@ -1,5 +1,6 @@
 using BenchmarkDotNet.Attributes;
 using DbBenchmark.DataAccess;
+using DbBenchmark.Metrics;
 
 namespace DbBenchmark.Benchmarking;
 
@@ -7,11 +8,14 @@ namespace DbBenchmark.Benchmarking;
 /// База для стратегий вставки. Размер данных параметризован через [ParamsSource],
 /// чтение памяти: файл генерируется один раз на этапе GlobalSetup (вне тайминга),
 /// внутри @Benchmark выполняется только сам механизм вставки.
+/// Метрики ресурсов собираются в IterationSetup/IterationCleanup (вне тайминга),
+/// поэтому не искажают измеряемое время.
 /// </summary>
 public abstract class InsertBenchmarkBase
 {
     protected string hostPath = "";
     protected IInsertStrategy Strategy = null!;
+    private ResourceMetrics? _metrics;
 
     [ParamsSource(nameof(SizeValues))]
     public long Rows { get; set; } = 1000;
@@ -27,6 +31,20 @@ public abstract class InsertBenchmarkBase
     }
 
     protected abstract IInsertStrategy CreateStrategy();
+
+    [IterationSetup]
+    public void IterSetup()
+    {
+        _metrics = new ResourceMetrics(Strategy.Name, Rows);
+        _metrics.Start();
+    }
+
+    [IterationCleanup]
+    public void IterCleanup()
+    {
+        _metrics?.Stop();
+        _metrics = null;
+    }
 
     [Benchmark]
     public long Insert()
