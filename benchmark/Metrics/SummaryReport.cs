@@ -112,7 +112,9 @@ public static class SummaryReport
         Directory.CreateDirectory(resultsDir);
         var csvPath = Path.Combine(resultsDir, "summary.csv");
         using (var writer = new StreamWriter(csvPath, append: false))
-        using (var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture)))
+        // Разделитель фиксируем явно на ',' — независимо от ListSeparator культуры процесса
+        // (на машинах с русской/иной локалью по умолчанию писалась бы ';').
+        using (var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture) { Delimiter = "," }))
             foreach (var line in rowsLine)
             {
                 foreach (var cell in line) csv.WriteField(cell);

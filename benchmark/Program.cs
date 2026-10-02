@@ -33,7 +33,7 @@ Job job = RunArgs.Mode switch
     DbBenchmark.Benchmarking.RunMode.Validation => Job.ShortRun.WithId("validation"),
     _ => Job.ShortRun
         .WithWarmupCount(1)
-        .WithIterationCount(2)
+        .WithIterationCount(12)
         .WithId(RunArgs.Mode.ToString()),
 };
 
